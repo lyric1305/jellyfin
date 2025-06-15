@@ -86,7 +86,7 @@ namespace MediaBrowser.Providers.Manager
             var itemOfType = (TItemType)item;
             var updateType = ItemUpdateType.None;
             var libraryOptions = LibraryManager.GetLibraryOptions(item);
-            var isFirstRefresh = item.DateLastRefreshed == default;
+            var isFirstRefresh = item.DateLastRefreshed.Date == DateTime.MinValue.Date;
             var hasRefreshedMetadata = true;
             var hasRefreshedImages = true;
 
@@ -262,14 +262,13 @@ namespace MediaBrowser.Providers.Manager
 
         protected async Task SaveItemAsync(MetadataResult<TItemType> result, ItemUpdateType reason, CancellationToken cancellationToken)
         {
+            await result.Item.UpdateToRepositoryAsync(reason, cancellationToken).ConfigureAwait(false);
             if (result.Item.SupportsPeople && result.People is not null)
             {
                 var baseItem = result.Item;
 
                 await LibraryManager.UpdatePeopleAsync(baseItem, result.People, cancellationToken).ConfigureAwait(false);
             }
-
-            await result.Item.UpdateToRepositoryAsync(reason, cancellationToken).ConfigureAwait(false);
         }
 
         protected virtual Task AfterMetadataRefresh(TItemType item, MetadataRefreshOptions refreshOptions, CancellationToken cancellationToken)
@@ -650,7 +649,7 @@ namespace MediaBrowser.Providers.Manager
             var dateLastImageRefresh = item.DateLastRefreshed;
 
             // Run all if either of these flags are true
-            var runAllProviders = options.ImageRefreshMode == MetadataRefreshMode.FullRefresh || dateLastImageRefresh == default(DateTime);
+            var runAllProviders = options.ImageRefreshMode == MetadataRefreshMode.FullRefresh || dateLastImageRefresh.Date == DateTime.MinValue.Date;
 
             if (!runAllProviders)
             {
@@ -817,7 +816,9 @@ namespace MediaBrowser.Providers.Manager
                     }
                     else
                     {
-                        var shouldReplace = options.MetadataRefreshMode > MetadataRefreshMode.ValidationOnly || options.ReplaceAllMetadata;
+                        var shouldReplace = (options.MetadataRefreshMode > MetadataRefreshMode.ValidationOnly && options.ReplaceAllMetadata)
+                            // Case for Scan for new and updated files
+                            || (options.MetadataRefreshMode == MetadataRefreshMode.Default && !options.ReplaceAllMetadata);
                         MergeData(temp, metadata, item.LockedFields, shouldReplace, true);
                     }
                 }
